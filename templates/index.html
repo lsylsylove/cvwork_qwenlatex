@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>LaTeX OCR 在线识别</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: "Segoe UI", sans-serif;
+      background: linear-gradient(135deg, #e0f7fa, #d1c4e9);
+      margin: 0;
+      padding: 40px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .container {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 60px 50px;
+      max-width: 900px;
+      width: 100%;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+      text-align: center;
+      animation: fadeIn 1s ease;
+    }
+
+    h2 {
+      color: #2c3e50;
+      margin-bottom: 30px;
+      font-weight: 600;
+      font-size: 24px;
+    }
+
+    input[type="file"] {
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      margin-right: 10px;
+      cursor: pointer;
+      transition: border-color 0.3s ease;
+    }
+
+    input[type="file"]:hover {
+      border-color: #007bff;
+    }
+
+    button {
+      background: linear-gradient(to right, #007bff, #00c6ff);
+      color: white;
+      padding: 10px 24px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 16px;
+      box-shadow: 0 4px 10px rgba(0, 123, 255, 0.2);
+      transition: background 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    button:hover {
+      background: linear-gradient(to right, #0056b3, #0099cc);
+      box-shadow: 0 6px 14px rgba(0, 123, 255, 0.3);
+    }
+
+    #preview {
+      margin-top: 25px;
+      max-height: 200px;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+      object-fit: contain;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      display: none;
+    }
+
+    #loading {
+      display: none;
+      margin: 20px 0;
+      color: #007bff;
+      font-weight: bold;
+      font-style: italic;
+      animation: blink 1.2s infinite;
+    }
+
+    @keyframes blink {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+
+    #resultBox {
+      margin-top: 30px;
+      background-color: #f4f8fb;
+      padding: 20px;
+      border-left: 6px solid #007bff;
+      font-family: Consolas, monospace;
+      border-radius: 8px;
+      white-space: pre-wrap;
+      position: relative;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      display: none;
+    }
+
+    #copyBtn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      font-size: 13px;
+      padding: 6px 12px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      background-color: #28a745;
+      color: white;
+      transition: background 0.2s ease;
+    }
+
+    #copyBtn:hover {
+      background-color: #1e7e34;
+    }
+
+    #renderedLatex {
+      margin-top: 25px;
+      font-size: 0.95em;
+      border-top: 1px dashed #ccc;
+      padding-top: 20px;
+      color: #333;
+      min-height: 40px;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+
+  <!-- ✅ MathJax 渲染配置 -->
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+</head>
+<body>
+  <div class="container">
+    <h2>LaTeX 数学公式图像识别</h2>
+    <form id="uploadForm" enctype="multipart/form-data">
+      <input type="file" name="image" accept="image/*" required />
+      <button type="submit">开始识别</button>
+    </form>
+
+    <img id="preview" src="" alt="预览图像" />
+
+    <p id="loading">⏳ 正在识别中，请稍候...</p>
+
+    <div id="resultBox">
+      <button id="copyBtn">📋 复制</button>
+      <span id="latexText"></span>
+    </div>
+
+    <div id="renderedLatex"></div>
+  </div>
+
+  <script>
+    const uploadForm = document.getElementById('uploadForm');
+    const preview = document.getElementById('preview');
+    const resultBox = document.getElementById('resultBox');
+    const latexText = document.getElementById('latexText');
+    const copyBtn = document.getElementById('copyBtn');
+    const renderedLatex = document.getElementById('renderedLatex');
+    const loading = document.getElementById('loading');
+
+    uploadForm.image.addEventListener('change', function () {
+      const file = this.files[0];
+      if (file) {
+        preview.src = URL.createObjectURL(file);
+        preview.style.display = 'block';
+        resultBox.style.display = 'none';
+        latexText.innerText = "";
+        copyBtn.style.display = 'none';
+        renderedLatex.innerHTML = '';
+      }
+    });
+
+    uploadForm.addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      const formData = new FormData(uploadForm);
+      resultBox.style.display = 'none';
+      latexText.innerText = "";
+      copyBtn.style.display = 'none';
+      renderedLatex.innerHTML = "";
+      loading.style.display = 'block';
+
+      try {
+        const response = await fetch('/predict', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+        if (data.latex) {
+          resultBox.style.display = 'block';
+          latexText.innerText = data.latex;
+          copyBtn.style.display = 'inline-block';
+          renderedLatex.innerHTML = `\\(${data.latex}\\)`;
+          MathJax.typesetPromise();
+        } else {
+          latexText.innerText = data.error || "未识别出公式";
+          resultBox.style.display = 'block';
+        }
+      } catch (err) {
+        latexText.innerText = "❌ 发生错误：" + err.message;
+        resultBox.style.display = 'block';
+      } finally {
+        loading.style.display = 'none';
+      }
+    });
+
+    copyBtn.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(latexText.innerText);
+        copyBtn.innerText = "✅ 已复制";
+        setTimeout(() => copyBtn.innerText = "📋 复制", 2000);
+      } catch (err) {
+        copyBtn.innerText = "❌ 复制失败";
+      }
+    });
+  </script>
+</body>
+</html>
